@@ -11,8 +11,9 @@ RED_DIR = os.path.join(BASE_DIR, "red")
 
 
 def debug_unknown_heroes():
+    unknown_count = 0
     cropper = OWScoreboardCropper()
-    hero_classifier = OWHeroTemplateClassifier(cropper=cropper)
+    hero_classifier = OWHeroTemplateClassifier(cropper=cropper, threshold=0.65)
 
     # png, jpg 둘 다 처리하고 싶으면 패턴에 추가
     patterns = ["*.png", "*.jpg", "*.jpeg"]
@@ -45,6 +46,7 @@ def debug_unknown_heroes():
                     break
 
             if has_unknown:
+                unknown_count += 1
                 print("\n[UNKNOWN HERO DETECTED]")
                 print(f"원본 폴더: {src_team_label}, 파일: {img_path}")
 
@@ -60,6 +62,7 @@ def debug_unknown_heroes():
                             print(f"    {i}: {name:15s}")
 
     print("\n[완료] unknown 영웅 디버그 검사 끝.")
+    print(f"Unknown 개수 : {unknown_count}")
 
 
 

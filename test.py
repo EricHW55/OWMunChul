@@ -3,7 +3,7 @@ from read_number import OWStatsRecognizer
 from hero_classification import OWHeroTemplateClassifier
 import cv2
 
-img_path = r"dataset/red/2025-11-25 030410.png"
+img_path = r"dataset/red/red_2025-11-26_01-22-31.png"
 img = cv2.imread(img_path)
 
 cropper = OWScoreboardCropper()

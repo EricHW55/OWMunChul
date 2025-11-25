@@ -35,8 +35,9 @@ class OWCSVBuilder:
     def _image_to_rows(self, img_path: str, src_team_label: str):
         """
         한 이미지(한 판 스샷) → 여러 row (최대 10줄)
-        src_team_label 이 'blue'면 win=1, 'red'면 win=0 으로 설정.
-        return: [row1, row2, ...]
+
+        - 폴더가 blue  : blue 팀 win=1,  red 팀 win=0
+        - 폴더가 red   : blue 팀 win=0,  red 팀 win=1
         """
         img = cv2.imread(img_path)
         if img is None:
@@ -46,22 +47,25 @@ class OWCSVBuilder:
         stats = self.stats_recognizer.read_all(img)
         heroes = self.hero_classifier.classify_all(img)
 
-        # 폴더 기준으로 승패 라벨 지정
-        # dataset/blue  -> 우리가 이긴 판  (win=1)
-        # dataset/red   -> 우리가 진 판    (win=0)
-        win = 1 if src_team_label == "blue" else 0
-
         rows = []
 
         for team in ("blue", "red"):
+            # 폴더 기준으로 이긴 팀 결정
+            if src_team_label == "blue":
+                # blue 폴더 => blue 팀이 이긴 경기
+                win = 1 if team == "blue" else 0
+            else:
+                # red 폴더 => red 팀이 이긴 경기
+                win = 1 if team == "red" else 0
+
             for i, (stat_slot, hero_slot) in enumerate(zip(stats[team], heroes[team])):
                 row = [
-                    src_team_label,          # 이 스샷이 들어있던 폴더 ("blue" / "red")
-                    os.path.basename(img_path),
-                    win,                    # 승패 라벨
-                    team,                   # row의 팀 ("blue"/"red")
-                    i,                      # slot_index (0~4)
-                    hero_slot["hero_name"], # hero
+                    src_team_label,              # 스샷이 있던 폴더 ("blue"/"red")
+                    os.path.basename(img_path),  # 파일 이름
+                    win,                         # 해당 팀의 승패 라벨
+                    team,                        # row의 팀 ("blue"/"red")
+                    i,                           # slot_index (0~4)
+                    hero_slot["hero_name"],      # hero
                     stat_slot.get("kills", 0),
                     stat_slot.get("assists", 0),
                     stat_slot.get("deaths", 0),
@@ -72,6 +76,7 @@ class OWCSVBuilder:
                 rows.append(row)
 
         return rows
+
 
     def build_csv(self):
         """

@@ -1,20 +1,19 @@
 import re
-import os
 import pandas as pd
 import numpy as np
 
 
-class OWFeatureBuilder:
+class OWFeatureTransformer:
     """
-    - ow_stats.csv 를 읽어서
+    - DataFrame(ow_stats 형식)을 받아서
       * hero 이름 정규화 (숫자 suffix 제거, 모르면 unknown)
       * hero 원핫 인코딩
-      * 매치/팀 단위 비율 피쳐
-      * K/D, 데미지/킬, 힐/데스 같은 파생 피쳐
-    - 결과를 새 CSV로 저장
+      * 매치/팀 단위 합계 & 비율 피쳐
+      * K/D, 데미지/킬, 힐/데스, KDA 등 파생 피쳐
+      * src_team, src_image, team, slot_index, hero, hero_norm 은 자동 drop
+    - transform_file() 로 CSV -> CSV 변환도 가능
     """
 
-    # 원본 영웅 목록(숫자 붙은 버전 포함)
     RAW_HERO_NAMES = [
         'ana', 'ashe', 'ashe2', 'baptiste', 'bastion', 'bastion2', 'bastion3',
         'brigitte', 'brigitte2', 'cassidy', 'cassidy2', 'cassidy3',
@@ -33,21 +32,24 @@ class OWFeatureBuilder:
         set(re.sub(r"\d+$", "", h) for h in RAW_HERO_NAMES)
     )
 
-    def __init__(self, input_csv="ow_stats.csv",
-                 output_csv="ow_stats_features.csv"):
-        self.input_csv = input_csv
-        self.output_csv = output_csv
-
+    def __init__(self):
         # unknown까지 포함한 최종 hero 카테고리
         self.hero_categories = self.BASE_HERO_NAMES + ["unknown"]
+
+        # 모델 입력에서 항상 버릴 ID/메타 컬럼들
+        self.id_cols_to_drop = [
+            "src_team",
+            "src_image",
+            "team",
+            "slot_index",
+            "hero",
+            "hero_norm",
+        ]
 
     # ---------- 내부 유틸 ----------
 
     def _normalize_hero_name(self, name: str) -> str:
-        """
-        'ashe2' -> 'ashe', 'lucio3' -> 'lucio' 처럼 숫자 suffix 제거.
-        리스트에 없는 이름이면 'unknown' 으로.
-        """
+        """'ashe2' -> 'ashe', 'lucio3' -> 'lucio' 처럼 숫자 suffix 제거."""
         if not isinstance(name, str) or name == "":
             return "unknown"
 
@@ -56,21 +58,17 @@ class OWFeatureBuilder:
             return base
         if name == "unknown":
             return "unknown"
-        # 혹시 이상한 이름이 들어오면 걍 unknown 처리
         return "unknown"
 
     def _ensure_numeric(self, df: pd.DataFrame, cols):
         for c in cols:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
         return df
 
     # ---------- 메인 처리 ----------
 
-    def load(self) -> pd.DataFrame:
-        df = pd.read_csv(self.input_csv)
-        return df
-
-    def add_hero_onehot(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_hero_onehot(self, df: pd.DataFrame) -> pd.DataFrame:
         # 영웅 이름 정규화
         df["hero_norm"] = df["hero"].astype(str).apply(self._normalize_hero_name)
 
@@ -81,10 +79,10 @@ class OWFeatureBuilder:
 
         return df
 
-    def add_match_and_team_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_match_and_team_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         src_image 단위(한 경기 스샷) / (src_image, team) 단위로
-        합계와 비율 피쳐 생성
+        합계와 비율 & 파생 피쳐 생성
         """
         # 숫자 컬럼 정리
         df = self._ensure_numeric(
@@ -93,6 +91,9 @@ class OWFeatureBuilder:
         )
 
         # -------- 1) 매치 전체 합계 (src_image 기준) --------
+        if "src_image" not in df.columns:
+            raise ValueError("DataFrame에 'src_image' 컬럼이 필요합니다.")
+
         group_match = df.groupby("src_image")
 
         df["match_total_kills"] = group_match["kills"].transform("sum")
@@ -113,6 +114,9 @@ class OWFeatureBuilder:
         df["heal_share_match"] = df["heal"] / df["match_total_heal_clip"]
 
         # -------- 2) 팀 단위 합계 (src_image, team 기준) --------
+        if "team" not in df.columns:
+            raise ValueError("DataFrame에 'team' 컬럼이 필요합니다.")
+
         group_team = df.groupby(["src_image", "team"])
 
         df["team_total_kills"] = group_team["kills"].transform("sum")
@@ -140,17 +144,7 @@ class OWFeatureBuilder:
         df["heal_per_death"] = df["heal"] / deaths_clip            # 데스당 힐
         df["kda"] = (df["kills"] + df["assists"]) / deaths_clip    # (킬+어시)/데스
 
-        return df
-
-    def build_features(self) -> pd.DataFrame:
-        """
-        전체 파이프라인 실행 후 DataFrame 반환
-        """
-        df = self.load()
-        df = self.add_hero_onehot(df)
-        df = self.add_match_and_team_features(df)
-
-        # 중간 clip 컬럼들 안 쓰고 싶으면 여기서 삭제해도 됨
+        # 중간 clip 컬럼 정리
         drop_cols = [
             "match_total_kills_clip", "match_total_deaths_clip",
             "match_total_damage_clip", "match_total_heal_clip",
@@ -161,18 +155,43 @@ class OWFeatureBuilder:
 
         return df
 
-    def save(self):
+    # ---------- 외부에서 쓰는 메인 API ----------
+
+    def transform(self, df: pd.DataFrame, drop_id_cols: bool = True) -> pd.DataFrame:
         """
-        build_features() 호출 후 output_csv 로 저장
+        ow_stats 형식 DataFrame -> feature DataFrame
+
+        - df: 최소한
+          ['src_team','src_image','team','slot_index','hero',
+           'kills','assists','deaths','damage','heal','mitig', ...] 포함
+        - drop_id_cols=True 이면
+          [src_team,src_image,team,slot_index,hero,hero_norm] 제거 후 반환
+        - win 컬럼이 있으면 그대로 유지되므로,
+          target으로 바로 쓸 수 있음.
         """
-        df = self.build_features()
-        df.to_csv(self.output_csv, index=False)
-        print(f"[DONE] Saved features to {self.output_csv}")
+        df = df.copy()
+
+        df = self._add_hero_onehot(df)
+        df = self._add_match_and_team_features(df)
+
+        if drop_id_cols:
+            drop_cols = [c for c in self.id_cols_to_drop if c in df.columns]
+            df = df.drop(columns=drop_cols)
+
+        return df
+
+    def transform_file(self, input_csv: str, output_csv: str,
+                       drop_id_cols: bool = True):
+        """
+        CSV -> CSV 변환용 헬퍼
+        """
+        df = pd.read_csv(input_csv)
+        out_df = self.transform(df, drop_id_cols=drop_id_cols)
+        out_df.to_csv(output_csv, index=False)
+        print(f"[DONE] Saved features to {output_csv}")
+
 
 
 if __name__ == "__main__":
-    builder = OWFeatureBuilder(
-        input_csv="ow_stats.csv",
-        output_csv="ow_stats_features.csv",
-    )
-    builder.save()
+    tf = OWFeatureTransformer()
+    tf.transform_file("ow_stats.csv", "ow_stats_features.csv", drop_id_cols=True)

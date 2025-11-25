@@ -24,9 +24,9 @@ class OWCSVBuilder:
         self.stats_recognizer = stats_recognizer or OWStatsRecognizer(cropper=self.cropper)
         self.hero_classifier = hero_classifier or OWHeroTemplateClassifier(cropper=self.cropper)
 
-        # CSV 헤더: src_team / src_image 추가
+        # CSV 헤더: src_team / src_image / win 추가
         self.header = [
-            "src_team", "src_image",
+            "src_team", "src_image", "win",
             "team", "slot_index", "hero",
             "kills", "assists", "deaths",
             "damage", "heal", "mitig",
@@ -35,6 +35,7 @@ class OWCSVBuilder:
     def _image_to_rows(self, img_path: str, src_team_label: str):
         """
         한 이미지(한 판 스샷) → 여러 row (최대 10줄)
+        src_team_label 이 'blue'면 win=1, 'red'면 win=0 으로 설정.
         return: [row1, row2, ...]
         """
         img = cv2.imread(img_path)
@@ -45,6 +46,11 @@ class OWCSVBuilder:
         stats = self.stats_recognizer.read_all(img)
         heroes = self.hero_classifier.classify_all(img)
 
+        # 폴더 기준으로 승패 라벨 지정
+        # dataset/blue  -> 우리가 이긴 판  (win=1)
+        # dataset/red   -> 우리가 진 판    (win=0)
+        win = 1 if src_team_label == "blue" else 0
+
         rows = []
 
         for team in ("blue", "red"):
@@ -52,9 +58,10 @@ class OWCSVBuilder:
                 row = [
                     src_team_label,          # 이 스샷이 들어있던 폴더 ("blue" / "red")
                     os.path.basename(img_path),
-                    team,                    # row의 팀 ("blue"/"red")
-                    i,                       # slot_index (0~4)
-                    hero_slot["hero_name"],  # hero
+                    win,                    # 승패 라벨
+                    team,                   # row의 팀 ("blue"/"red")
+                    i,                      # slot_index (0~4)
+                    hero_slot["hero_name"], # hero
                     stat_slot.get("kills", 0),
                     stat_slot.get("assists", 0),
                     stat_slot.get("deaths", 0),
@@ -109,8 +116,6 @@ class OWCSVBuilder:
                     print(f"[ERROR] {img_path} 처리 중 에러: {e}")
 
         print(f"[DONE] CSV 생성/추가 완료: {self.csv_path}")
-
-
 
 
 if __name__ == "__main__":

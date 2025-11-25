@@ -14,7 +14,7 @@ class OWHeroTemplateClassifier:
         cropper=None,
         template_dir="hero_templates",
         target_size=(64, 64),
-        threshold=0.7,
+        threshold=0.65,
     ):
         """
         cropper      : OWScoreboardCropper 인스턴스 (없으면 내부에서 생성)

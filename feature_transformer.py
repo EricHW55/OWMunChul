@@ -169,18 +169,7 @@ class OWFeatureTransformer:
         for r in ["tank", "damage", "support", "unknown"]:
             col = f"role_{r}"
             df[col] = (df["role_primary"] == r).astype(int)
-
-        # (선택) 서브 역할군도 쓰고 싶으면 여기에 ROLE_SUB_MAP 기반으로 추가하면 됨.
-        # 예:
-        # def map_sub_role(hero_norm: str) -> str:
-        #     h = str(hero_norm)
-        #     h = re.sub(r"\d+$", "", h)
-        #     return self.ROLE_SUB_MAP.get(h, "none")
-        #
-        # df["role_sub"] = df["hero_norm"].apply(map_sub_role)
-        # for r in ["main_dps", "off_dps", "main_heal", "flex_support", "none"]:
-        #     df[f"role_sub_{r}"] = (df["role_sub"] == r).astype(int)
-
+            
         return df
 
     def _add_match_and_team_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -262,6 +251,7 @@ class OWFeatureTransformer:
             "match_total_damage_clip", "match_total_heal_clip",
             "team_total_kills_clip", "team_total_deaths_clip",
             "team_total_damage_clip", "team_total_heal_clip",
+            "role_primary"
         ]
         df = df.drop(columns=drop_cols)
 

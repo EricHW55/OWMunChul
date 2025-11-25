@@ -27,7 +27,7 @@ def extract_rows_from_image(img_path: str) -> pd.DataFrame:
 
     cropper = OWScoreboardCropper()
     stats_recognizer = OWStatsRecognizer(cropper=cropper)
-    hero_classifier = OWHeroTemplateClassifier(cropper=cropper, threshold=0.3)
+    hero_classifier = OWHeroTemplateClassifier(cropper=cropper, threshold=0.5)
 
     stats = stats_recognizer.read_all(img)
     heroes = hero_classifier.classify_all(img)
@@ -63,6 +63,8 @@ def main():
 
     # 1) 이미지에서 raw 스탯 DataFrame 추출
     df_raw = extract_rows_from_image(IMG_PATH)
+    
+    print(df_raw)
 
     # 2) 피처 변환 (학습 때 쓰던 것과 동일한 전처리)
     transformer = OWFeatureTransformer()

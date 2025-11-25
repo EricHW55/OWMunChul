@@ -54,8 +54,8 @@ base_model = XGBClassifier(
 
 param_dist = {
     "n_estimators":     [200, 400, 600],
-    "max_depth":        [3, 4, 5, 6],
-    "learning_rate":    [0.03, 0.05, 0.1],
+    "max_depth":        [6, 7, 8, 9, 10, 13, 15],
+    "learning_rate":    [0.04, 0.05, 0.06],
     "subsample":        [0.6, 0.8, 1.0],
     "colsample_bytree": [0.6, 0.8, 1.0],
     "reg_lambda":       [1.0, 3.0, 5.0, 10.0],

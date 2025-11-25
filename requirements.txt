@@ -1,0 +1,10 @@
+opencv-python
+numpy
+pytesseract
+mss
+keyboard
+pygetwindow
+pandas
+scikit-learn
+xgboost
+matplotlib

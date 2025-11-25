@@ -8,8 +8,10 @@ class OWFeatureTransformer:
     - DataFrame(ow_stats 형식)을 받아서
       * hero 이름 정규화 (숫자 suffix 제거, 모르면 unknown)
       * hero 원핫 인코딩
+      * 역할군(탱/딜/힐) 원핫 인코딩
       * 매치/팀 단위 합계 & 비율 피쳐
-      * K/D, 데미지/킬, 힐/데스, KDA 등 파생 피쳐
+      * K/D, 데미지/킬, 데미지/데스, 힐/데스, KDA, 경감/데스,
+        팀 킬관여율(kp_share_team), 경기 킬관여율(kp_share_match) 등 파생 피쳐
       * src_team, src_image, team, slot_index, hero, hero_norm 은 자동 drop
     - transform_file() 로 CSV -> CSV 변환도 가능
     """
@@ -31,6 +33,77 @@ class OWFeatureTransformer:
     BASE_HERO_NAMES = sorted(
         set(re.sub(r"\d+$", "", h) for h in RAW_HERO_NAMES)
     )
+
+    # -------- 역할군 매핑 (네가 직접 채우면 됨) --------
+    # 기본 역할군: tank / damage / support
+    # 필요하면 'flex', 'main_dps', 'off_dps', 'main_heal', 'flex_support' 같은 서브 역할도
+    # ROLE_SUB_MAP 쪽에 네가 채워서 쓸 수 있게 틀만 만들어 둠.
+    TANK_NAME = [
+        'dva', 'doomfist', 'ramattra', 'wrecking_ball', 'roadhog', 'mauga', 
+        'sigma', 'orisa', 'winston', 'zarya', 'junker_queen', 'hazard'
+    ]
+    DPS_NAME = [
+        'genji', 'reaper', 'mei', 'bastion', 'venture', 'sojourn', 'soldier',
+        'sombra', 'symmetra', 'ashe', 'echo', 'widowmaker', 'junkrat', 'cassidy', 
+        'torbjorn', 'tracer', 'pharah', 'freja', 'hanzo'
+    ]
+    SUPPORT_NAME = [
+        'lifeweaver', 'lucio', 'mercy', 'moira', 'baptiste', 'brigitte', 'ana',
+        'wuyang', 'illari', 'zenyatta', 'juno', 'kiriko'
+    ]
+    
+    ROLE_PRIMARY_MAP = {
+        # Tank
+        "dva": "tank",
+        "doomfist": "tank",
+        "ramattra": "tank",
+        "wrecking_ball": "tank",
+        "roadhog": "tank",
+        "mauga": "tank",
+        "sigma": "tank",
+        "orisa": "tank",
+        "winston": "tank",
+        "zarya": "tank",
+        "junker_queen": "tank",
+        "hazard": "tank",
+
+        # DPS
+        "genji": "damage",
+        "reaper": "damage",
+        "mei": "damage",
+        "bastion": "damage",
+        "venture": "damage",
+        "sojourn": "damage",
+        "soldier": "damage",
+        "sombra": "damage",
+        "symmetra": "damage",
+        "ashe": "damage",
+        "echo": "damage",
+        "widowmaker": "damage",
+        "junkrat": "damage",
+        "cassidy": "damage",
+        "torbjorn": "damage",
+        "tracer": "damage",
+        "pharah": "damage",
+        "freja": "damage",
+        "hanzo": "damage",
+
+        # Support
+        "lifeweaver": "support",
+        "lucio": "support",
+        "mercy": "support",
+        "moira": "support",
+        "baptiste": "support",
+        "brigitte": "support",
+        "ana": "support",
+        "wuyang": "support",
+        "illari": "support",
+        "zenyatta": "support",
+        "juno": "support",
+        "kiriko": "support",
+    }
+    
+    
 
     def __init__(self):
         # unknown까지 포함한 최종 hero 카테고리
@@ -79,6 +152,37 @@ class OWFeatureTransformer:
 
         return df
 
+    def _add_role_onehot(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        hero_norm 기준으로 역할군(tank/damage/support/unknown) 원핫 추가.
+        ROLE_PRIMARY_MAP은 네가 직접 채워넣으면 됨.
+        """
+
+        def map_primary_role(hero_norm: str) -> str:
+            h = str(hero_norm)
+            # 혹시 suffix 안 지워진 값이 와도 한번 더 방어
+            h = re.sub(r"\d+$", "", h)
+            return self.ROLE_PRIMARY_MAP.get(h, "unknown")
+
+        df["role_primary"] = df["hero_norm"].apply(map_primary_role)
+
+        for r in ["tank", "damage", "support", "unknown"]:
+            col = f"role_{r}"
+            df[col] = (df["role_primary"] == r).astype(int)
+
+        # (선택) 서브 역할군도 쓰고 싶으면 여기에 ROLE_SUB_MAP 기반으로 추가하면 됨.
+        # 예:
+        # def map_sub_role(hero_norm: str) -> str:
+        #     h = str(hero_norm)
+        #     h = re.sub(r"\d+$", "", h)
+        #     return self.ROLE_SUB_MAP.get(h, "none")
+        #
+        # df["role_sub"] = df["hero_norm"].apply(map_sub_role)
+        # for r in ["main_dps", "off_dps", "main_heal", "flex_support", "none"]:
+        #     df[f"role_sub_{r}"] = (df["role_sub"] == r).astype(int)
+
+        return df
+
     def _add_match_and_team_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         src_image 단위(한 경기 스샷) / (src_image, team) 단위로
@@ -113,6 +217,9 @@ class OWFeatureTransformer:
         df["damage_share_match"] = df["damage"] / df["match_total_damage_clip"]
         df["heal_share_match"] = df["heal"] / df["match_total_heal_clip"]
 
+        # Kill Participation (경기 기준 킬 관여율)
+        df["kp_share_match"] = (df["kills"] + df["assists"]) / df["match_total_kills_clip"]
+
         # -------- 2) 팀 단위 합계 (src_image, team 기준) --------
         if "team" not in df.columns:
             raise ValueError("DataFrame에 'team' 컬럼이 필요합니다.")
@@ -135,13 +242,18 @@ class OWFeatureTransformer:
         df["damage_share_team"] = df["damage"] / df["team_total_damage_clip"]
         df["heal_share_team"] = df["heal"] / df["team_total_heal_clip"]
 
+        # Kill Participation (팀 기준 킬 관여율)
+        df["kp_share_team"] = (df["kills"] + df["assists"]) / df["team_total_kills_clip"]
+
         # -------- 3) 개인 파생 피쳐 (K/D, 킬당 딜, 데스당 힐 등) --------
         deaths_clip = df["deaths"].clip(lower=1)
         kills_clip = df["kills"].clip(lower=1)
 
         df["kills_per_death"] = df["kills"] / deaths_clip          # 목숨당 킬
         df["damage_per_kill"] = df["damage"] / kills_clip          # 킬당 딜
+        df["damage_per_death"] = df["damage"] / deaths_clip        # 목숨당 딜량
         df["heal_per_death"] = df["heal"] / deaths_clip            # 데스당 힐
+        df["mitig_per_death"] = df["mitig"] / deaths_clip          # 데스당 경감량
         df["kda"] = (df["kills"] + df["assists"]) / deaths_clip    # (킬+어시)/데스
 
         # 중간 clip 컬럼 정리
@@ -171,7 +283,8 @@ class OWFeatureTransformer:
         """
         df = df.copy()
 
-        df = self._add_hero_onehot(df)
+        df = self._add_hero_onehot(df)       # hero_* 원핫
+        df = self._add_role_onehot(df)       # role_* 원핫
         df = self._add_match_and_team_features(df)
 
         if drop_id_cols:
@@ -189,7 +302,6 @@ class OWFeatureTransformer:
         out_df = self.transform(df, drop_id_cols=drop_id_cols)
         out_df.to_csv(output_csv, index=False)
         print(f"[DONE] Saved features to {output_csv}")
-
 
 
 if __name__ == "__main__":

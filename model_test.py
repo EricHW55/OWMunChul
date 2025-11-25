@@ -1,115 +1,93 @@
-# train_xgb_win.py
-import pandas as pd
-import numpy as np
+# predict_from_image.py
 
-from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split, StratifiedKFold, RandomizedSearchCV
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    roc_auc_score,
-    classification_report,
-)
+import os
+import cv2
+import pandas as pd
 import joblib
 
+from crop_coordinates import OWScoreboardCropper
+from read_number import OWStatsRecognizer
+from hero_classification import OWHeroTemplateClassifier
+from feature_transformer import OWFeatureTransformer
 
-# -----------------------------
-# 1. 데이터 로드
-# -----------------------------
-DATA_PATH = "ow_stats_features.csv"
 
-df = pd.read_csv(DATA_PATH)
+def extract_rows_from_image(img_path: str) -> pd.DataFrame:
+    """
+    test.png 같은 스코어보드 스샷 한 장을
+    -> ow_stats.csv 형식과 동일한 row들로 변환해서 DataFrame 반환
 
-# 타깃 / 피처 분리
-target_col = "win"
-y = df[target_col].astype(int)
-X = df.drop(columns=[target_col])
+    컬럼:
+      src_team, src_image, team, slot_index, hero,
+      kills, assists, deaths, damage, heal, mitig
+    (win 라벨은 여기서는 모르는 값이므로 넣지 않음)
+    """
+    img = cv2.imread(img_path)
+    if img is None:
+        raise ValueError(f"이미지를 읽을 수 없습니다: {img_path}")
 
-print("전체 데이터:", X.shape, "샘플,", X.shape[1], "피쳐")
+    cropper = OWScoreboardCropper()
+    stats_recognizer = OWStatsRecognizer(cropper=cropper)
+    hero_classifier = OWHeroTemplateClassifier(cropper=cropper, threshold=0.3)
 
-# -----------------------------
-# 2. train / test 분할
-# -----------------------------
-# test set은 완전히 홀드아웃
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y,  # win 비율 유지
-)
+    stats = stats_recognizer.read_all(img)
+    heroes = hero_classifier.classify_all(img)
 
-print("Train:", X_train.shape, "Test:", X_test.shape)
+    rows = []
+    src_image = os.path.basename(img_path)
+    src_team = "unknown"  # 학습 때만 쓰이던 정보라 여기서는 의미 없음
 
-# -----------------------------
-# 3. XGBoost 분류기 + 하이퍼파라미터 탐색
-# -----------------------------
-base_model = XGBClassifier(
-    objective="binary:logistic",
-    eval_metric="logloss",  # 분류에서는 logloss/auc 주로 씀
-    tree_method="hist",     # GPU 있으면 'gpu_hist' 로 변경
-    n_jobs=-1,
-    random_state=42,
-)
+    for team in ("blue", "red"):
+        for slot_idx, (stat_slot, hero_slot) in enumerate(zip(stats[team], heroes[team])):
+            row = {
+                "src_team": src_team,
+                "src_image": src_image,
+                "team": team,
+                "slot_index": slot_idx,
+                "hero": hero_slot["hero_name"],
+                "kills": stat_slot.get("kills", 0),
+                "assists": stat_slot.get("assists", 0),
+                "deaths": stat_slot.get("deaths", 0),
+                "damage": stat_slot.get("damage", 0),
+                "heal": stat_slot.get("heal", 0),
+                "mitig": stat_slot.get("mitig", 0),
+            }
+            rows.append(row)
 
-param_dist = {
-    "n_estimators":     [200, 400, 600],
-    "max_depth":        [3, 4, 5, 6],
-    "learning_rate":    [0.03, 0.05, 0.1],
-    "subsample":        [0.6, 0.8, 1.0],
-    "colsample_bytree": [0.6, 0.8, 1.0],
-    "reg_lambda":       [1.0, 3.0, 5.0, 10.0],
-    "min_child_weight": [1, 3, 5],
-}
+    df = pd.DataFrame(rows)
+    return df
 
-cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-search = RandomizedSearchCV(
-    estimator=base_model,
-    param_distributions=param_dist,
-    n_iter=40,                        # 탐색 횟수 (데이터 양/시간 보고 조절)
-    cv=cv,
-    scoring="roc_auc",                # win 확률이니까 AUC 기준
-    n_jobs=-1,
-    verbose=1,
-    random_state=42,
-)
+def main():
+    IMG_PATH = "test.png"             # 테스트할 이미지 경로
+    MODEL_PATH = "xgb_win_model.joblib"  # 학습해 둔 모델 아티팩트
 
-print("\n===== 하이퍼파라미터 튜닝 시작 =====")
-search.fit(X_train, y_train)
+    # 1) 이미지에서 raw 스탯 DataFrame 추출
+    df_raw = extract_rows_from_image(IMG_PATH)
 
-print("\n===== 튜닝 완료 =====")
-print("Best params:", search.best_params_)
-print("Best CV ROC-AUC:", search.best_score_)
+    # 2) 피처 변환 (학습 때 쓰던 것과 동일한 전처리)
+    transformer = OWFeatureTransformer()
+    features = transformer.transform(df_raw, drop_id_cols=True)
 
-best_model = search.best_estimator_
+    # 3) XGBoost 모델 로드
+    artifact = joblib.load(MODEL_PATH)
+    model = artifact["model"]
+    feature_cols = artifact["feature_cols"]
+    threshold = artifact.get("threshold", 0.5)
 
-# -----------------------------
-# 4. 테스트 성능 평가
-# -----------------------------
-y_proba = best_model.predict_proba(X_test)[:, 1]
-y_pred = (y_proba >= 0.5).astype(int)
+    X = features[feature_cols]
 
-acc = accuracy_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred)
-auc = roc_auc_score(y_test, y_proba)
+    # 4) 각 row별 승리 확률 예측
+    win_proba = model.predict_proba(X)[:, 1]  # P(win=1)
 
-print("\n===== Test 성능 =====")
-print("Accuracy:", acc)
-print("F1-score:", f1)
-print("ROC-AUC:", auc)
-print("\nClassification report:")
-print(classification_report(y_test, y_pred, digits=3))
+    # 5) 영웅 이름 + 예측값 출력 (열 정렬)
+    hero_names = df_raw["hero"].astype(str).values
+    max_len = max(len(h) for h in hero_names)  # 가장 긴 이름 길이
 
-# -----------------------------
-# 5. 모델 아티팩트 저장
-# -----------------------------
-artifact = {
-    "model": best_model,
-    "feature_cols": X.columns.tolist(),
-    "target_col": target_col,
-    "threshold": 0.5,   # win 판정에 사용한 기준
-}
+    print("hero".ljust(max_len), "  win_proba")
+    for hero_name, p in zip(hero_names, win_proba):
+        # hero_name을 max_len 만큼 left-pad 해서 정렬
+        print(f"{hero_name.ljust(max_len)}  {p:.4f}")
+        
 
-joblib.dump(artifact, "xgb_win_model.joblib")
-print("\nSaved model to xgb_win_model.joblib")
+if __name__ == "__main__":
+    main()

@@ -1,5 +1,5 @@
 from crop_coordinates import OWScoreboardCropper
-from read_number import OWStatsRecognizer
+from read_number_paddleocr import OWStatsRecognizer
 from hero_classification import OWHeroTemplateClassifier
 import cv2
 

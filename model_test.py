@@ -6,7 +6,8 @@ import pandas as pd
 import joblib
 
 from crop_coordinates import OWScoreboardCropper
-from read_number import OWStatsRecognizer
+from read_number_paddleocr import OWStatsRecognizer
+# from read_number_cnn_model import OWStatsRecognizer
 from hero_classification import OWHeroTemplateClassifier
 from feature_transformer import OWFeatureTransformer
 
@@ -94,7 +95,7 @@ def main(_path:str):
     return pd.DataFrame([hero_names, win_proba]).T
 
 if __name__ == "__main__":
-    img_path = 'testdata/test1.png'
+    img_path = 'testdata/test1_1080p.png'
     results = main(img_path)
 
     blue_sum = results.iloc[:5, 1].sum()

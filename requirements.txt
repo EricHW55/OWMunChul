@@ -1,6 +1,8 @@
 opencv-python
 numpy
-pytesseract
+# pytesseract
+paddleocr
+paddlpaddle
 mss
 keyboard
 pygetwindow

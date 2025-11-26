@@ -69,7 +69,7 @@ DMG_N       = norm_roi(DMG_X0,       DMG_Y0,       DMG_X1,       DMG_Y1)
 # 2. 메인: 파란 + 빨간 팀 박스 그려서 디버그
 # ---------------------------------
 if __name__ == "__main__":
-    img_path = r"dataset/blue/2025-11-25 030028.png"  # 스샷 경로
+    img_path = r"testdata/test1_1080p.png"  # 스샷 경로
     img = cv2.imread(img_path)
     if img is None:
         raise ValueError(f"이미지를 읽을 수 없습니다: {img_path}")

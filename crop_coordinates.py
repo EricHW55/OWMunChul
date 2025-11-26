@@ -190,7 +190,8 @@ class OWScoreboardCropper:
 
 # -------- 사용 예시 --------
 if __name__ == "__main__":
-    img_path = r"dataset/blue/2025-11-25 030028.png"
+    # img_path = r"dataset/blue/2025-11-25 030028.png"
+    img_path = r"KakaoTalk_20251124_212103298.png"
     img = cv2.imread(img_path)
 
     cropper = OWScoreboardCropper()
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     print(boxes['blue'][0])
 
     # 디버그 이미지 보기
-    # debug_img = cropper.draw_debug(img, boxes)
-    # cv2.imshow("debug", debug_img)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    debug_img = cropper.draw_debug(img, boxes)
+    cv2.imshow("debug", debug_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()

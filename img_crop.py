@@ -31,7 +31,8 @@ REF_W, REF_H = 2048, 1151          # 기준 스샷 해상도 (원하면 바꿔�
 # -----------------------------
 
 if __name__ == "__main__":
-    img_path = r"dataset/blue/2025-11-25 030028.png"  # 실제 파일 경로
+    # img_path = r"dataset/blue/2025-11-25 030028.png"  # 실제 파일 경로
+    img_path = "test.png"
     img = cv2.imread(img_path)
 
     if img is None:

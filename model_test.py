@@ -57,8 +57,8 @@ def extract_rows_from_image(img_path: str) -> pd.DataFrame:
     return df
 
 
-def main():
-    IMG_PATH = "test.png"             # 테스트할 이미지 경로
+def main(_path:str):
+    IMG_PATH = _path                     # 테스트할 이미지 경로
     MODEL_PATH = "xgb_win_model.joblib"  # 학습해 둔 모델 아티팩트
 
     # 1) 이미지에서 raw 스탯 DataFrame 추출
@@ -90,6 +90,21 @@ def main():
         # hero_name을 max_len 만큼 left-pad 해서 정렬
         print(f"{hero_name.ljust(max_len)}  {p:.4f}")
         
+        
+    return pd.DataFrame([hero_names, win_proba]).T
 
 if __name__ == "__main__":
-    main()
+    img_path = 'testdata/test1.png'
+    results = main(img_path)
+
+    blue_sum = results.iloc[:5, 1].sum()
+    red_sum  = results.iloc[5:10, 1].sum()
+
+    # 합이 5가 되도록: 값 * (5 / 합)
+    results.iloc[:5, 1]  = results.iloc[:5, 1]  * (5 / blue_sum)
+    results.iloc[5:10, 1] = results.iloc[5:10, 1] * (5 / red_sum)
+
+    print(results)
+
+    # print("blue total:", results.iloc[:5, 1].sum())
+    # print("red total:", results.iloc[5:10, 1].sum())

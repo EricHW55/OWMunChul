@@ -24,7 +24,10 @@ class OWNumberDatasetBuilder:
 
         os.makedirs(self.out_img_dir, exist_ok=True)
 
+        # 🔹 여기 cropper는 기존 2K 기준 crop_coordinates.py 버전 사용
         self.cropper = cropper or OWScoreboardCropper()
+
+        # 🔹 PaddleOCR 숫자 리더 (라벨 생성용)
         self.stats_recognizer = stats_recognizer or OWStatsRecognizer(cropper=self.cropper)
 
         # 어떤 스탯 칸을 저장할지
@@ -73,28 +76,35 @@ class OWNumberDatasetBuilder:
 
         for img_path, src_team_label in image_infos:
             print(f"[PROCESS] {src_team_label}  {img_path}")
-            img = cv2.imread(img_path)
-            if img is None:
+            img_orig = cv2.imread(img_path)
+            if img_orig is None:
                 print(f"[WARN] 이미지를 읽을 수 없음: {img_path}")
                 continue
 
             try:
-                # 숫자 값 읽기 (PaddleOCR 사용)
-                stats = self.stats_recognizer.read_all(img)
+                # 1) 라벨은 2K 원본 기준으로 PaddleOCR 돌려서 읽음
+                stats = self.stats_recognizer.read_all(img_orig)
 
-                # 위치 정보 (crop 좌표)
-                boxes = self.cropper.get_player_boxes(img)
+                # 2) 학습용 이미지는 1920x1080(FHD)로 통일
+                target_w, target_h = 1920, 1080
+                img_1080 = cv2.resize(
+                    img_orig, (target_w, target_h),
+                    interpolation=cv2.INTER_AREA
+                )
+
+                # 3) 1080p 기준으로 crop 좌표 계산
+                boxes_1080 = self.cropper.get_player_boxes(img_1080)
 
                 for team in ["blue", "red"]:
-                    for slot_idx, slot_boxes in enumerate(boxes[team]):
-                        stat_slot = stats[team][slot_idx]
+                    for slot_idx, slot_boxes in enumerate(boxes_1080[team]):
+                        stat_slot = stats[team][slot_idx]  # ← 라벨은 2K에서 읽은 값
 
                         for stat_key in self.stat_keys:
                             value = stat_slot.get(stat_key, 0)
 
-                            # crop
+                            # 4) 1080p 이미지에서 crop
                             x0, y0, x1, y1 = slot_boxes[stat_key]
-                            crop = img[y0:y1, x0:x1]
+                            crop = img_1080[y0:y1, x0:x1]
 
                             if crop.size == 0:
                                 continue

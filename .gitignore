@@ -16,6 +16,9 @@ env/
 # 데이터 / 모델 파일 (원하면 조정)
 dataset/
 hero_templates/
+testdata/
+checkpoints/
+lastdata/
 *.pt
 *.pth
 *.h5

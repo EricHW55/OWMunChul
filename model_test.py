@@ -5,9 +5,9 @@ import cv2
 import pandas as pd
 import joblib
 
-from crop_coordinates import OWScoreboardCropper
-from read_number_paddleocr import OWStatsRecognizer
-# from read_number_cnn_model import OWStatsRecognizer
+from crop_coordinates_1k import OWScoreboardCropper
+# from read_number_paddleocr import OWStatsRecognizer
+from read_number_cnn_model import OWStatsRecognizer
 from hero_classification import OWHeroTemplateClassifier
 from feature_transformer import OWFeatureTransformer
 

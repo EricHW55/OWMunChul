@@ -6,25 +6,25 @@ import numpy as np
 # -----------------------------
 
 # Hero
-# BOARD_X0 = 602.64
-# BOARD_Y0 = 230.36
-# BOARD_X1 = 670.66
-# BOARD_Y1 = 297.55
+# BOARD_X0 = 565.00
+# BOARD_Y0 = 216.00
+# BOARD_X1 = 628.00
+# BOARD_Y1 = 279.00
 
 # 처치 도움 죽음
-# BOARD_X0 = 970.78
-# BOARD_Y0 = 230.36
-# BOARD_X1 = 1146.85
-# BOARD_Y1 = 297.55
+# BOARD_X0 = 910.00
+# BOARD_Y0 = 216.00
+# BOARD_X1 = 1075.00
+# BOARD_Y1 = 280.00
 
 # 킬 어시 데스
-# BOARD_X0 = 1147.65
-# BOARD_Y0 = 230.36
-# BOARD_X1 = 1478.98
-# BOARD_Y1 = 297.55
+# BOARD_X0 = 1075.00
+# BOARD_Y0 = 216.00
+# BOARD_X1 = 1386.00
+# BOARD_Y1 = 279.00
 
 
-REF_W, REF_H = 2048, 1151          # 기준 스샷 해상도 (원하면 바꿔도 됨)
+REF_W, REF_H = 1920, 1080          # 기준 스샷 해상도 (원하면 바꿔도 됨)
 
 # -----------------------------
 # 2. 메인: 드래그해서 좌표 얻기
@@ -32,7 +32,7 @@ REF_W, REF_H = 2048, 1151          # 기준 스샷 해상도 (원하면 바꿔�
 
 if __name__ == "__main__":
     # img_path = r"dataset/blue/2025-11-25 030028.png"  # 실제 파일 경로
-    img_path = "test.png"
+    img_path = "testdata/test1_1080p.png"
     img = cv2.imread(img_path)
 
     if img is None:
